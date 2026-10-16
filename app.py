@@ -11,6 +11,9 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
+# Maximum number of pages processed in a single /generate request
+MAX_PAGES_PER_BATCH = 40
+
 # Page sizes at 300 DPI (landscape)
 PAGE_SIZES = {
     'a4': (3508, 2480),
@@ -263,34 +266,39 @@ def generate():
 
         end_page = min(end_page, total)
 
-        if end_page - start_page + 1 > 40:
+        if end_page - start_page + 1 > MAX_PAGES_PER_BATCH:
             batches = []
-            for b_start in range(start_page, end_page + 1, 40):
-                b_end = min(b_start + 39, end_page)
+            for b_start in range(start_page, end_page + 1, MAX_PAGES_PER_BATCH):
+                b_end = min(b_start + MAX_PAGES_PER_BATCH - 1, end_page)
                 batches.append(f"{b_start}-{b_end}")
             return jsonify({
                 'success': False,
-                'error': f'Max 40 pages per batch. Total pages: {total}.',
+                'error': f'Max {MAX_PAGES_PER_BATCH} pages per batch. Total pages: {total}.',
                 'tip': f'Process in {len(batches)} batches: ' + ', '.join(batches),
                 'total_pages': total,
                 'suggested_batches': batches
             }), 400
 
-        # Extract images from all PDFs in sequence
-        all_images = []
+        # Render only the requested page range (global 1-based indexes across all PDFs)
+        images = []
+        zoom = 150 / 72
+        mat = fitz.Matrix(zoom, zoom)
+        global_offset = 0  # number of pages in PDFs processed so far
         for fp in saved_paths:
             doc = fitz.open(fp)
-            zoom = 150 / 72
-            mat = fitz.Matrix(zoom, zoom)
-            for i in range(len(doc)):
-                page = doc[i]
-                pix = page.get_pixmap(matrix=mat)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                all_images.append(img)
-            doc.close()
-
-        # Apply page range on combined images
-        images = all_images[start_page - 1:end_page]
+            try:
+                doc_len = len(doc)
+                # Local 0-based indexes whose global 1-based index is in [start_page, end_page]
+                local_start = max(0, start_page - 1 - global_offset)
+                local_end = min(doc_len - 1, end_page - 1 - global_offset)
+                for i in range(local_start, local_end + 1):
+                    pix = doc[i].get_pixmap(matrix=mat)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    images.append(img)
+                    del pix
+                global_offset += doc_len
+            finally:
+                doc.close()
 
         # Parse and apply skip pages
         skip_set = set()
@@ -321,6 +329,7 @@ def generate():
             'page_size': page_size,
         }
         pages, slide_count = stitch_slides(images, options)
+        del images
 
         output_id = uuid.uuid4().hex
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{output_id}_stitched.pdf")
