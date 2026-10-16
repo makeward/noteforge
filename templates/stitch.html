@@ -1787,7 +1787,7 @@
 
     function updateShareLinks() {
         const link = $('downloadLink').href;
-        const text = 'Check out my stitched PDF notes made with NoteForge! ⚡';
+        const text = 'Check out my stitched PDF notes made with Notesticho! ⚡';
         $('shareWhatsapp').href = `https://wa.me/?text=${encodeURIComponent(text + '\n' + link)}`;
         $('shareTelegram').href = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
     }
@@ -1805,8 +1805,8 @@
         const link = $('downloadLink').href;
         if (navigator.share) {
             navigator.share({
-                title: 'NoteForge - Stitched PDF',
-                text: 'Check out my stitched PDF notes made with NoteForge! ⚡',
+                title: 'Notesticho - Stitched PDF',
+                text: 'Check out my stitched PDF notes made with Notesticho! ⚡',
                 url: link
             }).catch(() => {});
         } else {

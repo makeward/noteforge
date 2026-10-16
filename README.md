@@ -1,4 +1,4 @@
-# ⚡ NoteForge — Smart PDF Stitcher
+# ⚡ Notesticho — Smart PDF Stitcher
 
 > Stitch class note slides into compact, print-ready PDFs. Save paper & ink.
 
